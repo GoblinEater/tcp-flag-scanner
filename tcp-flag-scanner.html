@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TCP Flag Scanner — Goblin Eaters Cyber Cavern</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0b0e14;
+  --surface: #111520;
+  --surface2: #161b28;
+  --border: #1e2636;
+  --border2: #263040;
+  --text: #c8d4e8;
+  --dim: #6b7f9e;
+  --faint: #3a4a60;
+  --blue: #4a9eff;
+  --blue-dim: #1e3d6e;
+  --green: #3ecf8e;
+  --green-dim: #0e3024;
+  --red: #ff4d6a;
+  --red-dim: #3d0f18;
+  --amber: #ffb340;
+  --amber-dim: #3d2800;
+  font-size: clamp(14px, 1vw + 8px, 16px);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .8rem;
+}
+
+.header-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.header-sub {
+  font-size: .6rem;
+  color: var(--dim);
+  margin-top: .15rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.scan-btns {
+  display: flex;
+  gap: .4rem;
+  flex-wrap: wrap;
+}
+
+.scan-btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: .72rem;
+  padding: .45rem .9rem;
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+  transition: all .18s;
+}
+.scan-btn:hover { color: var(--text); border-color: var(--dim); }
+.scan-btn.active { background: var(--blue-dim); border-color: var(--blue); color: var(--blue); }
+.scan-btn.active.ack { background: var(--amber-dim); border-color: var(--amber); color: var(--amber); }
+
+.nav-strip {
+  padding: .6rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .6rem;
+  flex-wrap: wrap;
+}
+
+.step-counter {
+  font-size: .68rem;
+  color: var(--dim);
+  letter-spacing: .05em;
+  min-width: 200px;
+  text-align: center;
+}
+
+.nbtn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: .72rem;
+  padding: .4rem .9rem;
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  transition: all .18s;
+}
+.nbtn:hover { border-color: var(--dim); color: var(--blue); }
+.nbtn:disabled { opacity: .25; cursor: not-allowed; }
+.nbtn.primary { background: var(--blue-dim); border-color: var(--blue); color: var(--blue); }
+
+.auto-btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: .7rem;
+  padding: .4rem .8rem;
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+}
+.auto-btn.running { color: var(--amber); border-color: var(--amber); }
+
+.main {
+  flex: 1;
+  padding: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(240px, 30%) 1fr;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--surface);
+  height: 260px;
+}
+
+.row-text {
+  padding: .9rem 1rem;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+  background: var(--surface2);
+  height: 100%;
+  overflow-y: auto;
+}
+
+.row-label {
+  font-size: .62rem;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--dim);
+}
+.row-label.open { color: var(--green); }
+.row-label.closed { color: var(--red); }
+.row-label.direct { color: var(--blue); }
+.row-label.firewall { color: var(--amber); }
+
+.row-desc {
+  font-size: .78rem;
+  line-height: 1.55;
+  color: var(--text);
+  flex: 1;
+}
+.row-desc.empty { color: var(--faint); }
+
+.flags-block { display: flex; flex-direction: column; gap: .35rem; }
+.flags-title { font-size: .6rem; color: var(--faint); text-transform: uppercase; letter-spacing: .08em; }
+.flags-row { display: flex; gap: .3rem; }
+
+.flag-chip {
+  flex: 1;
+  text-align: center;
+  font-size: .58rem;
+  padding: .3rem .1rem;
+  border: 1px solid var(--border2);
+  border-radius: 3px;
+  color: var(--faint);
+  background: transparent;
+  letter-spacing: .03em;
+}
+.flag-chip.set {
+  background: var(--green-dim);
+  border-color: var(--green);
+  color: var(--green);
+  font-weight: 600;
+}
+.flag-chip.set.rst {
+  background: var(--red-dim);
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.row-canvas-wrap {
+  position: relative;
+  height: 100%;
+}
+canvas { display: block; width: 100%; height: 100%; }
+
+.result-badge {
+  position: absolute;
+  top: .6rem;
+  transform: translateX(-50%);
+  font-size: .68rem;
+  padding: .25rem .6rem;
+  border-radius: 3px;
+  letter-spacing: .04em;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity .3s, left .3s;
+}
+.result-badge.show { opacity: 1; }
+.result-badge.rst { background: var(--red-dim); color: var(--red); border: 1px solid var(--red); }
+.result-badge.silent { background: var(--green-dim); color: var(--green); border: 1px solid var(--green); }
+.result-badge.filtered { background: var(--amber-dim); color: var(--amber); border: 1px solid var(--amber); }
+.result-badge.unfiltered { background: var(--blue-dim); color: var(--blue); border: 1px solid var(--blue); }
+
+.synth-panel {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 1rem 1.2rem;
+  font-size: .82rem;
+  line-height: 1.6;
+  min-height: 70px;
+  display: flex;
+  align-items: center;
+}
+.synth-panel.empty { color: var(--faint); font-style: italic; }
+.synth-panel .hl { color: var(--amber); font-weight: 600; }
+
+@media (max-width: 700px) {
+  .row { grid-template-columns: 1fr; }
+  .row-text { border-right: none; border-bottom: 1px solid var(--border); }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header-title">TCP Flag Scanner</div>
+    <div class="header-sub">Layer 4 · Week 7a · Goblin Eaters Cyber Cavern</div>
+  </div>
+  <div class="scan-btns" id="scanBtns"></div>
+</div>
+
+<div class="nav-strip">
+  <button class="nbtn" id="btnPrev" onclick="prevStep()" disabled>← Prev</button>
+  <div class="step-counter" id="stepCounter">Select a scan type to begin</div>
+  <button class="nbtn primary" id="btnNext" onclick="nextStep()">Next →</button>
+  <button class="nbtn" onclick="resetScan()">Reset</button>
+  <button class="auto-btn" id="btnAuto" onclick="toggleAuto()">▶ Auto Play</button>
+</div>
+
+<div class="main">
+  <div class="row" id="row1">
+    <div class="row-text">
+      <div class="row-label" id="row1Label">TARGET 1 — PORT OPEN</div>
+      <div class="row-desc empty" id="row1Desc">Select a scan type above.</div>
+      <div class="flags-block">
+        <div class="flags-title">Sent</div>
+        <div class="flags-row" id="row1SentFlags"></div>
+        <div class="flags-title">Received</div>
+        <div class="flags-row" id="row1RecvFlags"></div>
+      </div>
+    </div>
+    <div class="row-canvas-wrap">
+      <canvas id="c1"></canvas>
+      <div class="result-badge" id="row1Badge"></div>
+    </div>
+  </div>
+
+  <div class="row" id="row2">
+    <div class="row-text">
+      <div class="row-label" id="row2Label">TARGET 2 — PORT CLOSED</div>
+      <div class="row-desc empty" id="row2Desc">Select a scan type above.</div>
+      <div class="flags-block">
+        <div class="flags-title">Sent</div>
+        <div class="flags-row" id="row2SentFlags"></div>
+        <div class="flags-title">Received</div>
+        <div class="flags-row" id="row2RecvFlags"></div>
+      </div>
+    </div>
+    <div class="row-canvas-wrap">
+      <canvas id="c2"></canvas>
+      <div class="result-badge" id="row2Badge"></div>
+    </div>
+  </div>
+
+  <div class="synth-panel empty" id="synthPanel">
+    Run a scan above, then step through both rows to compare the outcome side by side.
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// FLAG DEFINITIONS
+// ═══════════════════════════════════════════════════════
+const FLAG_ORDER = ['URG','ACK','PSH','RST','SYN','FIN'];
+
+function flagSet(flags) {
+  return FLAG_ORDER.map(f => flags.includes(f));
+}
+
+function renderFlags(container, flags) {
+  container.innerHTML = '';
+  if (!flags) {
+    FLAG_ORDER.forEach(f => {
+      const d = document.createElement('div');
+      d.className = 'flag-chip';
+      d.textContent = f;
+      container.appendChild(d);
+    });
+    return;
+  }
+  FLAG_ORDER.forEach(f => {
+    const d = document.createElement('div');
+    const isSet = flags.includes(f);
+    d.className = 'flag-chip' + (isSet ? ' set' : '') + (isSet && f === 'RST' ? ' rst' : '');
+    d.textContent = f;
+    container.appendChild(d);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// SCAN DEFINITIONS
+// mode: 'portstate' (row1=open target, row2=closed target)
+//       'firewall'  (row1=direct, row2=through firewall)
+// Each scan has: sentFlags, and per-row response behavior at each step
+// ═══════════════════════════════════════════════════════
+const SCANS = {
+  SYN: {
+    label: 'SYN Scan', mode: 'portstate', accent: 'blue',
+    sentFlags: ['SYN'],
+    steps: [
+      { row1: { desc: 'Visitor sends the real opening move — SYN — to the open trade.', recvFlags: null, badge: null },
+        row2: { desc: 'Same SYN sent to the closed trade.', recvFlags: null, badge: null } },
+      { row1: { desc: 'Open trade replies with SYN-ACK — the expected second step. The scanner never completes the handshake with a final ACK.', recvFlags: ['SYN','ACK'], badge: { text: 'SYN-ACK', cls: 'unfiltered' } },
+        row2: { desc: 'No trade is staffed here. The guard rejects immediately — RST — regardless of the well-formed request.', recvFlags: ['RST'], badge: { text: 'RST — closed', cls: 'rst' } } }
+    ],
+    synth: 'A real opening move gets a real answer from an open trade, and an immediate rejection from a closed one — the cleanest signal of the five, and the one that looks most like ordinary traffic.'
+  },
+  NULL: {
+    label: 'NULL Scan', mode: 'portstate', accent: 'blue',
+    sentFlags: [],
+    steps: [
+      { row1: { desc: 'Visitor names the trade but sets no flags at all — nothing resembling any stage of a real transaction.', recvFlags: null, badge: null },
+        row2: { desc: 'Same flagless probe sent to the closed trade.', recvFlags: null, badge: null } },
+      { row1: { desc: 'The open trade\'s guard has nothing worth troubling the worker with. No response.', recvFlags: [], badge: { text: 'Silent', cls: 'silent' } },
+        row2: { desc: 'The closed trade\'s guard rejects it exactly as he would anything else — RST, regardless of how malformed the knock was.', recvFlags: ['RST'], badge: { text: 'RST — closed', cls: 'rst' } } }
+    ],
+    synth: 'Silence means the trade is staffed. A flat rejection means it isn\'t. Per RFC 793 — verified against a compliant stack; Windows, many Cisco devices, and IBM OS/400 send RST either way.'
+  },
+  FIN: {
+    label: 'FIN Scan', mode: 'portstate', accent: 'blue',
+    sentFlags: ['FIN'],
+    steps: [
+      { row1: { desc: 'Visitor announces "I\'m finished with this trader" — to a guard who never admitted him for any trade to begin with.', recvFlags: null, badge: null },
+        row2: { desc: 'Same premature FIN sent to the closed trade.', recvFlags: null, badge: null } },
+      { row1: { desc: 'Nothing to close out, nothing worth answering. No response.', recvFlags: [], badge: { text: 'Silent', cls: 'silent' } },
+        row2: { desc: 'The closed trade\'s guard answers exactly as he always does for an unstaffed post — RST.', recvFlags: ['RST'], badge: { text: 'RST — closed', cls: 'rst' } } }
+    ],
+    synth: 'Same pattern as NULL: silence for staffed, rejection for unstaffed — the flag combination changes, the guard\'s underlying logic doesn\'t.'
+  },
+  XMAS: {
+    label: 'Xmas Scan', mode: 'portstate', accent: 'blue',
+    sentFlags: ['URG','PSH','FIN'],
+    steps: [
+      { row1: { desc: 'Visitor arrives lit up like a Christmas tree — URG, PSH, and FIN all set — demanding urgency for a conversation that never opened.', recvFlags: null, badge: null },
+        row2: { desc: 'Same three-flag combination sent to the closed trade.', recvFlags: null, badge: null } },
+      { row1: { desc: 'The open trade\'s guard recognizes gibberish dressed up as urgency. No response.', recvFlags: [], badge: { text: 'Silent', cls: 'silent' } },
+        row2: { desc: 'The closed trade\'s guard rejects it uniformly — RST.', recvFlags: ['RST'], badge: { text: 'RST — closed', cls: 'rst' } } }
+    ],
+    synth: 'A third variation on the same RFC 793 quirk. All three (NULL, FIN, Xmas) are reliable against Unix/Linux — and effectively useless against Windows, which answers RST regardless of port state.'
+  },
+  ACK: {
+    label: 'ACK Scan', mode: 'firewall', accent: 'ack',
+    sentFlags: ['ACK'],
+    steps: [
+      { row1: { desc: 'Visitor presents a fake closing word — ACK — for an introduction that never happened. No firewall in the path. Port state doesn\'t matter here — open or closed, the answer will be identical.', recvFlags: null, badge: null },
+        row2: { desc: 'Same fake ACK, this time the road passes through a stateful firewall before reaching the city.', recvFlags: null, badge: null } },
+      { row1: { desc: 'Nothing stands in the way. The city\'s own guard finds no matching connection and answers RST directly.', recvFlags: ['RST'], badge: { text: 'RST — unfiltered', cls: 'unfiltered' } },
+        row2: { desc: 'The firewall checks its connection table, finds no session this ACK could belong to, and drops it. It never reaches the city at all.', recvFlags: [], badge: { text: 'Dropped — filtered', cls: 'filtered' } } }
+    ],
+    synth: '<span class="hl">An ACK scan can\'t tell you open from closed</span> — both produce RST with no firewall present. What it reveals is whether something stateful is watching the road at all.'
+  }
+};
+
+let currentScan = null;
+let currentStep = -1;
+let autoTimer = null;
+
+// ═══════════════════════════════════════════════════════
+// BUTTON SETUP
+// ═══════════════════════════════════════════════════════
+const scanBtnsEl = document.getElementById('scanBtns');
+Object.keys(SCANS).forEach(key => {
+  const btn = document.createElement('button');
+  btn.className = 'scan-btn';
+  btn.textContent = SCANS[key].label;
+  btn.onclick = () => selectScan(key);
+  btn.id = 'btn_' + key;
+  scanBtnsEl.appendChild(btn);
+});
+
+function selectScan(key, keepAuto) {
+  currentScan = key;
+  currentStep = -1;
+  if (!keepAuto) stopAuto();
+  Object.keys(SCANS).forEach(k => {
+    document.getElementById('btn_' + k).classList.toggle('active', k === key);
+    document.getElementById('btn_' + k).classList.toggle('ack', k === 'ACK' && k === key);
+  });
+
+  const scan = SCANS[key];
+  const isFirewall = scan.mode === 'firewall';
+
+  document.getElementById('row1Label').textContent = isFirewall ? 'DIRECT — NO FIREWALL' : 'TARGET 1 — PORT OPEN';
+  document.getElementById('row1Label').className = 'row-label ' + (isFirewall ? 'direct' : 'open');
+  document.getElementById('row2Label').textContent = isFirewall ? 'THROUGH STATEFUL FIREWALL' : 'TARGET 2 — PORT CLOSED';
+  document.getElementById('row2Label').className = 'row-label ' + (isFirewall ? 'firewall' : 'closed');
+
+  renderFlags(document.getElementById('row1SentFlags'), null);
+  renderFlags(document.getElementById('row2SentFlags'), null);
+  renderFlags(document.getElementById('row1RecvFlags'), null);
+  renderFlags(document.getElementById('row2RecvFlags'), null);
+  document.getElementById('row1Desc').textContent = 'Press Next to send the probe.';
+  document.getElementById('row1Desc').className = 'row-desc';
+  document.getElementById('row2Desc').textContent = 'Press Next to send the probe.';
+  document.getElementById('row2Desc').className = 'row-desc';
+  document.getElementById('row1Badge').className = 'result-badge';
+  document.getElementById('row2Badge').className = 'result-badge';
+  document.getElementById('synthPanel').className = 'synth-panel empty';
+  document.getElementById('synthPanel').innerHTML = 'Press Next to begin ' + scan.label + '.';
+
+  packets1 = []; packets2 = [];
+  draw1(); draw2();
+  updateNav();
+}
+
+// ═══════════════════════════════════════════════════════
+// CANVAS SETUP — two mini scenes
+// ═══════════════════════════════════════════════════════
+const c1 = document.getElementById('c1'), ctx1 = c1.getContext('2d');
+const c2 = document.getElementById('c2'), ctx2 = c2.getContext('2d');
+let packets1 = [], packets2 = [];
+
+function resizeCanvases() {
+  [c1, c2].forEach(c => {
+    const wrap = c.parentElement;
+    c.width = wrap.clientWidth;
+    c.height = wrap.clientHeight;
+  });
+}
+
+function nodePositions(hasFirewall) {
+  if (hasFirewall) {
+    return { host: 0.12, mid: 0.5, target: 0.88 };
+  }
+  return { host: 0.15, target: 0.85 };
+}
+
+function drawScene(ctx, canvas, hasFirewall, label) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const y = canvas.height / 2;
+  const pos = nodePositions(hasFirewall);
+
+  ctx.save();
+  ctx.strokeStyle = '#1a2030';
+  ctx.lineWidth = 1;
+  if (hasFirewall) {
+    ctx.beginPath(); ctx.moveTo(pos.host * canvas.width, y); ctx.lineTo(pos.mid * canvas.width, y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pos.mid * canvas.width, y); ctx.lineTo(pos.target * canvas.width, y); ctx.stroke();
+  } else {
+    ctx.beginPath(); ctx.moveTo(pos.host * canvas.width, y); ctx.lineTo(pos.target * canvas.width, y); ctx.stroke();
+  }
+  ctx.restore();
+
+  drawNode(ctx, pos.host * canvas.width, y, '#4a9eff', 'Host');
+  if (hasFirewall) drawNode(ctx, pos.mid * canvas.width, y, '#ffb340', 'Firewall', true);
+  drawNode(ctx, pos.target * canvas.width, y, '#6b7f9e', 'Target');
+}
+
+function drawNode(ctx, x, y, color, label, isFirewall) {
+  ctx.save();
+  const r = 20;
+  ctx.fillStyle = '#13182a';
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  if (isFirewall) {
+    ctx.beginPath(); ctx.roundRect(x - 18, y - 22, 36, 44, 4); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = color;
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath(); ctx.moveTo(x - 12, y - 12 + i * 10); ctx.lineTo(x + 12, y - 12 + i * 10); ctx.stroke();
+    }
+  } else {
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI / 3) * i - Math.PI / 6;
+      const px = x + r * Math.cos(a), py = y + r * Math.sin(a);
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  ctx.fillStyle = color;
+  ctx.font = `600 11px 'JetBrains Mono'`;
+  ctx.textAlign = 'center';
+  ctx.fillText(label, x, y + r + 16);
+  ctx.restore();
+}
+
+function draw1() {
+  const scan = currentScan ? SCANS[currentScan] : null;
+  drawScene(ctx1, c1, false, 'row1');
+  drawPacketsOnCanvas(ctx1, packets1);
+}
+function draw2() {
+  const scan = currentScan ? SCANS[currentScan] : null;
+  const hasFirewall = scan && scan.mode === 'firewall';
+  drawScene(ctx2, c2, hasFirewall, 'row2');
+  drawPacketsOnCanvas(ctx2, packets2);
+}
+
+function drawPacketsOnCanvas(ctx, packets) {
+  packets.forEach(p => {
+    const x = p.fx + (p.tx - p.fx) * p.t;
+    const y = p.fy + (p.ty - p.fy) * p.t;
+    ctx.save();
+    ctx.shadowColor = p.color; ctx.shadowBlur = 12;
+    ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#0b0e14';
+    ctx.font = `bold 6px 'JetBrains Mono'`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(p.label, x, y);
+    ctx.restore();
+  });
+}
+
+function spawnPacket(canvas, packetsArr, fromFrac, toFrac, color, label) {
+  const y = canvas.height / 2;
+  packetsArr.push({ fx: fromFrac * canvas.width, fy: y, tx: toFrac * canvas.width, ty: y, color, label, t: 0, done: false });
+}
+
+function animatePackets() {
+  [packets1, packets2].forEach(arr => {
+    for (let i = arr.length - 1; i >= 0; i--) {
+      arr[i].t += .025;
+      if (arr[i].t >= 1) arr.splice(i, 1);
+    }
+  });
+  draw1(); draw2();
+  requestAnimationFrame(animatePackets);
+}
+
+// ═══════════════════════════════════════════════════════
+// STEP ENGINE
+// ═══════════════════════════════════════════════════════
+function nextStep() {
+  if (!currentScan) return;
+  const scan = SCANS[currentScan];
+  if (currentStep >= scan.steps.length - 1) return;
+  currentStep++;
+  applyStep(scan, currentStep);
+  updateNav();
+}
+
+function prevStep() {
+  if (!currentScan || currentStep < 0) return;
+  currentStep--;
+  if (currentStep < 0) {
+    selectScan(currentScan);
+  } else {
+    applyStep(SCANS[currentScan], currentStep, true);
+  }
+  updateNav();
+}
+
+function applyStep(scan, idx, isRewind) {
+  const stepData = scan.steps[idx];
+  const hasFirewall = scan.mode === 'firewall';
+
+  // ROW 1
+  document.getElementById('row1Desc').textContent = stepData.row1.desc;
+  document.getElementById('row1Desc').className = 'row-desc';
+  renderFlags(document.getElementById('row1SentFlags'), scan.sentFlags);
+  if (idx === 0 && !isRewind) {
+    spawnPacket(c1, packets1, 0.15, 0.85, colorFor(scan.accent), shortLabel(scan.sentFlags));
+  }
+  if (stepData.row1.recvFlags !== null) {
+    renderFlags(document.getElementById('row1RecvFlags'), stepData.row1.recvFlags);
+    if (!isRewind) spawnPacket(c1, packets1, 0.85, 0.15, stepData.row1.recvFlags.includes('RST') ? '#ff4d6a' : '#3ecf8e', stepData.row1.recvFlags.includes('RST') ? 'RST' : (stepData.row1.recvFlags.length ? 'ACK' : '·'));
+  } else {
+    renderFlags(document.getElementById('row1RecvFlags'), null);
+  }
+  const badge1 = document.getElementById('row1Badge');
+  if (stepData.row1.badge) {
+    badge1.textContent = stepData.row1.badge.text;
+    badge1.className = 'result-badge show ' + stepData.row1.badge.cls;
+    positionBadge(badge1, c1, 0.85); // row1 event always happens at the target
+  } else {
+    badge1.className = 'result-badge';
+  }
+
+  // ROW 2
+  document.getElementById('row2Desc').textContent = stepData.row2.desc;
+  document.getElementById('row2Desc').className = 'row-desc';
+  renderFlags(document.getElementById('row2SentFlags'), scan.sentFlags);
+  if (idx === 0 && !isRewind) {
+    const toFrac = hasFirewall ? 0.5 : 0.85;
+    spawnPacket(c2, packets2, 0.15, toFrac, colorFor(scan.accent), shortLabel(scan.sentFlags));
+    if (hasFirewall) {
+      // second leg only fires if it would pass -- for ACK it never does, so no second-leg packet
+    }
+  }
+  if (stepData.row2.recvFlags !== null) {
+    renderFlags(document.getElementById('row2RecvFlags'), stepData.row2.recvFlags);
+    if (!isRewind && stepData.row2.recvFlags.length) {
+      spawnPacket(c2, packets2, hasFirewall ? 0.5 : 0.85, 0.15, '#ff4d6a', 'RST');
+    }
+  } else {
+    renderFlags(document.getElementById('row2RecvFlags'), null);
+  }
+  const badge2 = document.getElementById('row2Badge');
+  if (stepData.row2.badge) {
+    badge2.textContent = stepData.row2.badge.text;
+    badge2.className = 'result-badge show ' + stepData.row2.badge.cls;
+    // If this is the filtered/dropped outcome, the event happens AT the firewall, not the target.
+    const eventAtFirewall = hasFirewall && stepData.row2.badge.cls === 'filtered';
+    positionBadge(badge2, c2, eventAtFirewall ? 0.5 : 0.85);
+  } else {
+    badge2.className = 'result-badge';
+  }
+
+  // SYNTHESIS — only after final step
+  const synth = document.getElementById('synthPanel');
+  if (idx === scan.steps.length - 1) {
+    synth.innerHTML = scan.synth;
+    synth.className = 'synth-panel';
+  } else {
+    synth.innerHTML = 'Step ' + (idx + 1) + ' of ' + scan.steps.length + ' — press Next to continue.';
+    synth.className = 'synth-panel empty';
+  }
+}
+
+function shortLabel(flags) {
+  if (!flags.length) return '·';
+  return flags[0].slice(0,3);
+}
+function colorFor(accent) {
+  return accent === 'ack' ? '#ffb340' : '#4a9eff';
+}
+function positionBadge(badgeEl, canvas, xFraction) {
+  badgeEl.style.left = (xFraction * canvas.width) + 'px';
+}
+
+function updateNav() {
+  const scan = currentScan ? SCANS[currentScan] : null;
+  const total = scan ? scan.steps.length : 0;
+  document.getElementById('stepCounter').textContent = !currentScan ? 'Select a scan type to begin' :
+    (currentStep < 0 ? 'Ready — press Next to send the probe' : `Step ${currentStep + 1} of ${total}`);
+  document.getElementById('btnPrev').disabled = !currentScan || currentStep < 0;
+  document.getElementById('btnNext').disabled = !currentScan || currentStep >= total - 1;
+}
+
+function resetScan() {
+  if (currentScan) selectScan(currentScan);
+  stopAuto();
+}
+
+function stopAuto() {
+  autoRunning = false;
+  if (autoTimer) { clearTimeout(autoTimer); autoTimer = null; }
+  const btn = document.getElementById('btnAuto');
+  btn.textContent = '▶ Auto Play'; btn.classList.remove('running');
+}
+
+function toggleAuto() {
+  if (!currentScan) return;
+  const btn = document.getElementById('btnAuto');
+  if (autoTimer) {
+    stopAuto();
+  } else {
+    btn.textContent = '⏸ Pause'; btn.classList.add('running');
+    autoRunning = true;
+    scheduleAutoTick();
+  }
+}
+
+let autoRunning = false;
+
+function scheduleAutoTick() {
+  if (!autoRunning) return;
+  autoTimer = setTimeout(() => {
+    if (!autoRunning) return;
+    const scan = SCANS[currentScan];
+    if (currentStep >= scan.steps.length - 1) {
+      // Cycle complete — pause 2s, then restart this scan from the top
+      autoTimer = setTimeout(() => {
+        if (!autoRunning) return;
+        selectScan(currentScan, true);
+        scheduleAutoTick();
+      }, 2000);
+      return;
+    }
+    nextStep();
+    scheduleAutoTick();
+  }, 2200);
+}
+
+// ═══════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════
+window.addEventListener('resize', () => { resizeCanvases(); draw1(); draw2(); });
+resizeCanvases();
+draw1(); draw2();
+animatePackets();
+updateNav();
+</script>
+</body>
+</html>
